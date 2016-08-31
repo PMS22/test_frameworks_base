@@ -6375,6 +6375,14 @@ public final class Settings {
         public static final String CAMERA_DOUBLE_TAP_POWER_GESTURE_DISABLED =
                 "camera_double_tap_power_gesture_disabled";
 
+	/**
+	 * Disabling of triple power button gesture
+	 *
+	 * @hide
+	 */
+	public static final String ACTIVITY_TRIPLE_TAP_POWER_GESTURE_DISABLED =
+                "activity_triple_tap_power_gesture_disabled";
+
         /**
          * Boolean value whether to link ringtone and notification volume
          * @hide

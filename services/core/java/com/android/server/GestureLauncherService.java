@@ -58,6 +58,13 @@ public class GestureLauncherService extends SystemService {
     private static final long CAMERA_POWER_DOUBLE_TAP_MAX_TIME_MS = 300;
     private static final long CAMERA_POWER_DOUBLE_TAP_MIN_TIME_MS = 120;
 
+    /**
+     * Time in ms for launching a secific activity after triple piwer button gesture
+     * is activated
+     */
+    private static final long ACTIVITY_POWER_TRIPLE_TAP_MAX_TIME_MS = 500;
+    private static final long ACTIVITY_POWER_TRIPLE_TAP_MIN_TIME_MS = 310;
+
     /** The listener that receives the gesture event. */
     private final GestureEventListener mGestureListener = new GestureEventListener();
 
@@ -142,6 +149,9 @@ public class GestureLauncherService extends SystemService {
         mContext.getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor(Settings.Secure.CAMERA_DOUBLE_TAP_POWER_GESTURE_DISABLED),
                 false, mSettingObserver, mUserId);
+	mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ACTIVITY_TRIPLE_TAP_POWER_GESTURE_DISABLED),
+                false, mSettingObserver, mUserId);
     }
 
     private void updateCameraRegistered() {
@@ -157,6 +167,16 @@ public class GestureLauncherService extends SystemService {
         boolean enabled = isCameraDoubleTapPowerSettingEnabled(mContext, mUserId);
         synchronized (this) {
             mCameraDoubleTapPowerEnabled = enabled;
+        }
+    }
+
+    /*
+     * Need to disable camera launch event first
+     */
+    private void updateActivityTripleTapPowerEnabled() {
+        boolean enabled = isActivityTripleTapPowerSettingEnabled(mContext, mUserId);
+        synchronized (this) {
+            mActivityTripleTapPowerEnabled = enabled;
         }
     }
 
@@ -228,6 +248,11 @@ public class GestureLauncherService extends SystemService {
                         Settings.Secure.CAMERA_DOUBLE_TAP_POWER_GESTURE_DISABLED, 0, userId) == 0);
     }
 
+    public static boolean is ActivityTripleTapPowerSettingEnabled(Context context, int userId) {
+        return isActivityTripleTapPowerEnabled(context.getResources())
+                && (Settings.Secure.getIntForUser(context.getContentResolver(),
+                        Settings.Secure.ACTIVITY_TRIPLE_TAP_POWER_GESTURE_DISABLED, 0, userId) == 0);
+
     /**
      * Whether to enable the camera launch gesture.
      */
@@ -248,6 +273,7 @@ public class GestureLauncherService extends SystemService {
      */
     public static boolean isGestureLauncherEnabled(Resources resources) {
         return isCameraLaunchEnabled(resources) || isCameraDoubleTapPowerEnabled(resources);
+	return isActivityLaunchEnabled(resources) || isActivityTripleTapPowerEnabled(resources);
     }
 
     public boolean interceptPowerKeyDown(KeyEvent event, boolean interactive) {
@@ -277,6 +303,57 @@ public class GestureLauncherService extends SystemService {
         MetricsLogger.histogram(mContext, "power_double_tap_interval", (int) doubleTapInterval);
         return intercept && launched;
     }
+
+    /**
+     * For Tripe Tap event
+     * logging
+     */
+    public boolean interceptPowerKeyDown(KeyEvent event, boolean interactive) {
+        boolean launched = false;
+        synchronized (this) {
+            if (!mActivityTripeTapPowerEnabled) {
+                mLastPowerDownWhileNonInteractive = 0;
+                return false;
+            }
+            if (event.getEventTime() - mLastPowerDownWhileNonInteractive
+                    < ACIVITY_POWER_TRIPLE_TAP_TIME_MS) {
+                launched = true;
+            }
+            mLastPowerDownWhileNonInteractive = interactive ? 0 : event.getEventTime();
+        }
+        if (launched) {
+            Slog.i(TAG, "Power button triple tap gesture detected, launching activity named X.");
+            launched = handleActivityLaunchGesture(false /* useWakelock */,
+                    MetricsLogger.ACTION_TRIPLE_TAP_POWER_ACTIVITY_GESTURE);
+        }
+        return launched;
+    }
+
+    /**
+     * @return true if activity was launched succesfully, false otherwise.
+     */
+    private boolean handleActivityLaunchGesture(boolean useWakelock, int logCategory) {
+        boolean userSetupComplete = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.USER_SETUP_COMPLETE, 0) != 0;
+        if (!userSetupComplete) {
+            if (DBG) Slog.d(TAG, String.format(
+                    "userSetupComplete = %s, ignoring activity launch.",
+                    userSetupComplete));
+            return false;
+        }
+        if (DBG) Slog.d(TAG, String.format(
+                "userSetupComplete = %s, performing activity launch.",
+                userSetupComplee));
+
+        if (useWakelock) {
+            // Wakelock launch
+            mWakeLock.acquire(500L);
+        }
+        StatusBarManagerInternal service = LocalServices.getService(
+                StatusBarManagerInternal.class);
+        service.onActivityLaunchGestureDetected();
+        MetricsLogger.action(mContext, logCategory);
+        return true;
 
     /**
      * @return true if camera was launched, false otherwise.

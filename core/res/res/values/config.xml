@@ -2545,6 +2545,9 @@
          is non-interactive. -->
     <bool name="config_cameraDoubleTapPowerGestureEnabled">true</bool>
 
+    <!-- Triple tap gesture -->
+    <bool name="config_activityTripleTapPowerGestureEnabled">true</bool>
+
     <!-- Support in Surfaceflinger for blur layers.
          NOTE: This requires additional hardware-specific code. -->
     <bool name="config_ui_blur_enabled">false</bool>
